@@ -1,0 +1,1 @@
+from utils_jlg.fenics import solve_allen_cahn_1D
