@@ -1,3 +1,0 @@
-[submodule "fourier_neural_operator"]
-	path = fourier_neural_operator
-	url = https://github.com/zongyi-li/fourier_neural_operator.git
