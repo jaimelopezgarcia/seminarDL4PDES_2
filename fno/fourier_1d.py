@@ -14,9 +14,9 @@ import operator
 from functools import reduce
 from functools import partial
 from timeit import default_timer
-from fourier_neural_operator.utilities3 import *
+from fno.utilities3 import *
 
-from fourier_neural_operator.Adam import Adam
+from fno.Adam import Adam
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -30,7 +30,7 @@ class SpectralConv1d(nn.Module):
         super(SpectralConv1d, self).__init__()
 
         """
-        1D Fourier layer. It does FFT, linear transform, and Inverse FFT.    
+        1D Fourier layer. It does FFT, linear transform, and Inverse FFT.
         """
 
         self.in_channels = in_channels
@@ -68,7 +68,7 @@ class FNO1d(nn.Module):
         2. 4 layers of the integral operators u' = (W + K)(u).
             W defined by self.w; K defined by self.conv .
         3. Project from the channel space to the output space by self.fc1 and self.fc2 .
-        
+
         input: the solution of the initial condition and location (a(x), x)
         input shape: (batchsize, x=s, c=2)
         output: the solution of a later timestep
@@ -130,8 +130,8 @@ class FNO1d(nn.Module):
         gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
         gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
         return gridx.to(device)
-    
-    
+
+
 class FNO1d_time(nn.Module):
     def __init__(self, modes, width):
         super(FNO1d_time, self).__init__()
@@ -142,7 +142,7 @@ class FNO1d_time(nn.Module):
         2. 4 layers of the integral operators u' = (W + K)(u).
             W defined by self.w; K defined by self.conv .
         3. Project from the channel space to the output space by self.fc1 and self.fc2 .
-        
+
         input: the solution of the initial condition and location (a(x), x)
         input shape: (batchsize, x=s, c=2)
         output: the solution of a later timestep
@@ -158,18 +158,28 @@ class FNO1d_time(nn.Module):
         self.conv1 = SpectralConv1d(self.width, self.width, self.modes1)
         self.conv2 = SpectralConv1d(self.width, self.width, self.modes1)
         self.conv3 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv4 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv5 = SpectralConv1d(self.width, self.width, self.modes1)
+        self.conv6 = SpectralConv1d(self.width, self.width, self.modes1)
         self.w0 = nn.Conv1d(self.width, self.width, 1)
         self.w1 = nn.Conv1d(self.width, self.width, 1)
         self.w2 = nn.Conv1d(self.width, self.width, 1)
         self.w3 = nn.Conv1d(self.width, self.width, 1)
+        self.w4 = nn.Conv1d(self.width, self.width, 1)
+        self.w5 = nn.Conv1d(self.width, self.width, 1)
+        self.w6 = nn.Conv1d(self.width, self.width, 1)
         self.bn0 = torch.nn.BatchNorm1d( self.width)
         self.bn1 = torch.nn.BatchNorm1d( self.width)
         self.bn2 = torch.nn.BatchNorm1d( self.width)
         self.bn3 = torch.nn.BatchNorm1d( self.width)
+        self.bn4 = torch.nn.BatchNorm1d( self.width)
+        self.bn5 = torch.nn.BatchNorm1d( self.width)
+        self.bn6 = torch.nn.BatchNorm1d( self.width)
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
+        x = x.permute(0,2,1)### PERMUTE from standar channel size to size channel
         grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
         x = self.fc0(x)
@@ -194,20 +204,38 @@ class FNO1d_time(nn.Module):
         x1 = self.conv3(x)
         x2 = self.w3(x)
         x = self.bn3(x1 + x2)
+        x = F.gelu(x)
 
+
+        x1 = self.conv4(x)
+        x2 = self.w4(x)
+        x = self.bn4(x1 + x2)
+        x = F.gelu(x)
+
+
+        x1 = self.conv5(x)
+        x2 = self.w5(x)
+        x = self.bn5(x1 + x2)
+        x = F.gelu(x)
+
+        x1 = self.conv6(x)
+        x2 = self.w6(x)
+        x = self.bn6(x1 + x2)
+        x = F.gelu(x)
         # x = x[..., :-self.padding] # pad the domain if input is non-periodic
-        x = x.permute(0, 2, 1)
+        x = x.permute(0, 2, 1) #changing again for linear layer
         x = self.fc1(x)
         x = F.gelu(x)
         x = self.fc2(x)
+        x = x.permute(0, 2, 1)
         return x
 
     def get_grid(self, shape, device):
         batchsize, size_x = shape[0], shape[1]
         gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
         gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
-        return gridx.to(device)    
-    
+        return gridx.to(device)
+
 if __name__ == "__main__":
     ################################################################
     #  configurations
