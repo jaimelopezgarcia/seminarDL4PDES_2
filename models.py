@@ -181,7 +181,7 @@ class ModelEvaluationCallback(Callback):
                     with open("./errors.txt",'a+') as f:
                         f.write("epoch {}".format(epoch))
                         f.write(str(e))
-       
+
 class BaseModelPL(pl.LightningModule):
 
     def __init__(self, results_dir = ".", tol_next_step = 0.0015 , lr = 1e-3, weight_decay = 1e-5):
@@ -328,7 +328,7 @@ class BaseModelPL(pl.LightningModule):
 
         optimizer = torch.optim.Adam(self.parameters(), lr = self._lr,  weight_decay= self._weight_decay)
 
-        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=20, factor=0.8, threshold = 0.5*1e-3 ,verbose = True, eps = 1e-5)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=20, factor=0.8, threshold = 1e-3 ,verbose = True, eps = 1e-5)
 
 
         scheduler = {

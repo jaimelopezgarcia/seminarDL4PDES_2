@@ -10,17 +10,17 @@ from utils import load_model
 
 config_dict = {
 
-    "data": dict(batch_size = 120, skip_steps = 20, store_steps_ahead = 5,
-                 test_ratio = 0.2, max_time_index = 500, drop_last = True, skip_first_n = 30 ),
+    "data": dict(batch_size = 120, skip_steps = 40, store_steps_ahead = 5,
+                 test_ratio = 0.25, max_time_index = 600, drop_last = True, skip_first_n = 8 ),
 
-    "width":40,
-    "modes":12,
-    "epochs":200,
+    "width":30,
+    "modes":20,
+    "epochs":400,
     "name_experiment": "default_experiment_name",
     "name_data": "AC1d",
-    "period_evaluation_epochs":30,
-    "tol_next_step": 0.001,
-    "weight_decay": 1e-5,
+    "period_evaluation_epochs":50,
+    "tol_next_step": 1e-4,
+    "weight_decay": 1e-6,
     "load_pre_trained_model": False,
     "model":"fno",
     "norm":True,
@@ -40,8 +40,8 @@ class Main():
 
     def run_experiments_1D_time(self):
 
-        width_list = [10,50,100]
-        modes_list = [5,20,50]
+        width_list = [10,100]
+        modes_list = [10,40]
 
         for width in width_list:
             for modes in modes_list:
