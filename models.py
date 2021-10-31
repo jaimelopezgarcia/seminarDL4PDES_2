@@ -15,6 +15,8 @@ from functools import partial
 import scipy.io
 from utils import load_arrays, prepare_x_y_time_data, evaluate_model
 from fno.fourier_1d import FNO1d_time
+from config import settings as stts
+import yaml
 
 class SimDataset(Dataset):
     def __init__(self, X,Y):
@@ -37,7 +39,7 @@ class DataModulePL(pl.LightningDataModule):#problemdatamoduele import
 
     def __init__(self, name , batch_size = 60, skip_steps = 10,
                  store_steps_ahead = 5, test_ratio = 0.2,
-                 max_time_index = 500, drop_last = True):
+                 max_time_index = 500, drop_last = True, skip_first_n = 0):
 
         super().__init__()
 
@@ -50,7 +52,7 @@ class DataModulePL(pl.LightningDataModule):#problemdatamoduele import
         self._test_ratio = test_ratio
         self._max_time_index = max_time_index
         self._drop_last = drop_last
-
+        self._skip_first_n = skip_first_n
 
     def prepare_data(self):
 
@@ -72,7 +74,8 @@ class DataModulePL(pl.LightningDataModule):#problemdatamoduele import
         Xtrain, Ytrain = prepare_x_y_time_data( arrays_train ,
                                                  skip_steps = self._skip_steps,
                                                  store_steps_ahead = self._store_steps_ahead,
-                                                 max_time_index = self._max_time_index)
+                                                 max_time_index = self._max_time_index,
+                                                 skip_first_n = self._skip_first_n)
 
         self.train_dataset = SimDataset(Xtrain,Ytrain)
 
@@ -80,7 +83,8 @@ class DataModulePL(pl.LightningDataModule):#problemdatamoduele import
         Xtest, Ytest = prepare_x_y_time_data( arrays_test ,
                                                skip_steps = self._skip_steps,
                                                store_steps_ahead = self._store_steps_ahead,
-                                               max_time_index = self._max_time_index)
+                                               max_time_index = self._max_time_index,
+                                               skip_first_n = self._skip_first_n )
 
         self.test_dataset = SimDataset(Xtest,Ytest)
 
@@ -100,9 +104,9 @@ class DataModulePL(pl.LightningDataModule):#problemdatamoduele import
         if not(hasattr(self, "_data_arrays")):
             raise(ValueError("prepare data has not been called yet"))
 
-        index_samples = [int(val) for val in np.linspace(0,len(data_arrays), 10)]
+        index_samples = [int(val) for val in np.linspace(0,len(data_arrays), 11)]
         index_samples[-1]=index_samples[-1]-1
-        time_init = [0, 10, 40,  60, 60,  90, 90,  120,120, 200, 220]
+        time_init = [30, 80, 60,  70, 100,  100, 90,80,  120,120, 200, 220]
 
         test_samples = []
         for i,index in enumerate(index_samples):
@@ -133,7 +137,7 @@ class ModelEvaluationCallback(Callback):
         self._on_train_start = on_train_start
 
     def on_train_start(self, trainer, model):
-        """
+
         if self._on_train_start:
             epoch = trainer.current_epoch
             test_samples = self._data_module.get_test_samples()
@@ -147,7 +151,7 @@ class ModelEvaluationCallback(Callback):
                     f.write(str(e))
         else:
             pass
-        """
+
 
     def on_train_end(self, trainer, model):
         epoch = trainer.current_epoch
@@ -164,7 +168,7 @@ class ModelEvaluationCallback(Callback):
             pass
 
     def on_epoch_end(self, trainer, model):
-        """
+
         epoch = trainer.current_epoch
         test_samples = self._data_module.get_test_samples()
 
@@ -177,7 +181,7 @@ class ModelEvaluationCallback(Callback):
                     with open("./errors.txt",'a+') as f:
                         f.write("epoch {}".format(epoch))
                         f.write(str(e))
-       """
+       
 class BaseModelPL(pl.LightningModule):
 
     def __init__(self, results_dir = ".", tol_next_step = 0.0015 , lr = 1e-3, weight_decay = 1e-5):
@@ -324,7 +328,7 @@ class BaseModelPL(pl.LightningModule):
 
         optimizer = torch.optim.Adam(self.parameters(), lr = self._lr,  weight_decay= self._weight_decay)
 
-        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.8, threshold = 1e-3 ,verbose = True, eps = 1e-6)
+        lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=20, factor=0.8, threshold = 0.5*1e-3 ,verbose = True, eps = 1e-5)
 
 
         scheduler = {
@@ -335,13 +339,135 @@ class BaseModelPL(pl.LightningModule):
         }
 
         return [optimizer], [scheduler]
+class ResidualBlock(nn.Module):
+
+    def __init__(self, in_channels, out_channels , n_layers = 2, stride = 1, padding = 1, normalization = True):
+
+        super().__init__()
+
+        layers = []
+
+        for i in range(n_layers):
+
+            if i == 0:
+                _in_channels = in_channels
+                _stride = stride
+            else:
+                _in_channels = out_channels
+                _stride = 1
+
+            layer = nn.Conv1d(_in_channels, out_channels, kernel_size=3, stride = _stride,
+                     padding=padding, bias=True) #Bias can be set to false if using batch_norm ( is present there)
+
+            torch.nn.init.kaiming_uniform_(layer.weight, a=0, mode='fan_in', nonlinearity='leaky_relu')
+
+            layers.append(layer)
+
+        if normalization:
+            self.norm = torch.nn.BatchNorm1d(out_channels)
+        else:
+            self.norm = nn.Identity()
+
+
+
+
+
+
+
+        self._layers = nn.ModuleList(layers)
+
+        if (in_channels != out_channels) or (stride>1):
+
+            self._shortcut = nn.Conv1d(in_channels, out_channels, kernel_size = 3, stride = stride, padding = padding)
+
+        else:
+
+            self._shortcut = nn.Identity()
+
+        self._activation = torch.nn.ReLU()
+
+    def forward(self, x):
+
+        _x = x
+
+        for layer in self._layers:
+
+            _x = self._activation(layer(_x))
+
+        out = self.norm(self._shortcut(x) + _x)#WRONG BATCH NORM WRONGLY APP
+
+        return out
+
+
+class BasicNet(nn.Module):
+
+    def __init__(self, in_channels, hidden_channels, out_channels, blocks = [2, 2, 2, 2, 2], add_input_output = True, normalization = True):
+
+        super().__init__()
+
+        layers = []
+
+        for i,_block in enumerate(blocks):
+
+
+            if i == 0:
+                _in_channels = in_channels
+            else:
+                _in_channels = hidden_channels
+
+
+            layer = ResidualBlock(_in_channels, hidden_channels, stride = 1, padding=1, normalization = normalization)
+
+            layers.append(layer)
+
+
+
+        self._hidden_layers = nn.ModuleList(layers)
+
+
+        self._out_layer = nn.Conv1d( hidden_channels , out_channels, kernel_size=1, stride = 1,
+             padding=0, bias=True)
+
+        self._add_input_output = add_input_output
+
+
+        self.act_out = torch.nn.Tanh()
+
+
+    def forward(self, x):
+
+        _x = x
+
+        for layer in self._hidden_layers:
+
+            _x = layer(_x)
+
+        if self._add_input_output:
+
+            _x = self._out_layer(_x) + x
+
+        else:
+
+            _x = self._out_layer(_x)
+
+        #_x = self.act_out(_x)
+        return _x
+
+
+class BasicNet_pl(BaseModelPL):
+
+    def __init__(self, in_channels, hidden_channels, out_channels,  results_dir = ".", tol_next_step = 0.0015 , lr = 1e-3, weight_decay = 1e-5):
+
+        super().__init__(results_dir = results_dir, tol_next_step = tol_next_step , lr = lr, weight_decay = weight_decay)
+        self._model = BasicNet(in_channels, hidden_channels, out_channels)
+        self.save_hyperparameters()
 
 class FNO_1d_time_pl(BaseModelPL):
 
-    def __init__(self, modes, width,  results_dir = ".", tol_next_step = 0.0015 , lr = 1e-3, weight_decay = 1e-5):
+    def __init__(self, modes, width, norm = True,   results_dir = ".", tol_next_step = 0.0015 , lr = 1e-3, weight_decay = 1e-5):
 
         super().__init__( results_dir = results_dir, tol_next_step = tol_next_step , lr = lr, weight_decay = weight_decay)
 
-        self._model = FNO1d_time(modes, width)
+        self._model = FNO1d_time(modes, width, norm = norm)
 
         self.save_hyperparameters()

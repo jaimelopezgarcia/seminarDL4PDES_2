@@ -133,8 +133,8 @@ class FNO1d(nn.Module):
 
 
 class FNO1d_time(nn.Module):
-    def __init__(self, modes, width):
-        super(FNO1d_time, self).__init__()
+    def __init__(self, modes, width, norm = True):
+        super().__init__()
 
         """
         The overall network. It contains 4 layers of the Fourier layer.
@@ -159,22 +159,29 @@ class FNO1d_time(nn.Module):
         self.conv2 = SpectralConv1d(self.width, self.width, self.modes1)
         self.conv3 = SpectralConv1d(self.width, self.width, self.modes1)
         self.conv4 = SpectralConv1d(self.width, self.width, self.modes1)
-        self.conv5 = SpectralConv1d(self.width, self.width, self.modes1)
-        self.conv6 = SpectralConv1d(self.width, self.width, self.modes1)
+    #    self.conv5 = SpectralConv1d(self.width, self.width, self.modes1)
+#        self.conv6 = SpectralConv1d(self.width, self.width, self.modes1)
         self.w0 = nn.Conv1d(self.width, self.width, 1)
         self.w1 = nn.Conv1d(self.width, self.width, 1)
         self.w2 = nn.Conv1d(self.width, self.width, 1)
         self.w3 = nn.Conv1d(self.width, self.width, 1)
         self.w4 = nn.Conv1d(self.width, self.width, 1)
-        self.w5 = nn.Conv1d(self.width, self.width, 1)
-        self.w6 = nn.Conv1d(self.width, self.width, 1)
-        self.bn0 = torch.nn.BatchNorm1d( self.width)
-        self.bn1 = torch.nn.BatchNorm1d( self.width)
-        self.bn2 = torch.nn.BatchNorm1d( self.width)
-        self.bn3 = torch.nn.BatchNorm1d( self.width)
-        self.bn4 = torch.nn.BatchNorm1d( self.width)
-        self.bn5 = torch.nn.BatchNorm1d( self.width)
-        self.bn6 = torch.nn.BatchNorm1d( self.width)
+    #    self.w5 = nn.Conv1d(self.width, self.width, 1)
+    #    self.w6 = nn.Conv1d(self.width, self.width, 1)
+        if norm:
+            self.bn0 = torch.nn.BatchNorm1d( self.width)
+            self.bn1 = torch.nn.BatchNorm1d( self.width)
+            self.bn2 = torch.nn.BatchNorm1d( self.width)
+            self.bn3 = torch.nn.BatchNorm1d( self.width)
+            self.bn4 = torch.nn.BatchNorm1d( self.width)
+        else:
+            self.bn0 = torch.nn.Identity()
+            self.bn1 = torch.nn.Identity()
+            self.bn2 = torch.nn.Identity()
+            self.bn3 = torch.nn.Identity()
+            self.bn4 = torch.nn.Identity()
+    #    self.bn5 = torch.nn.BatchNorm1d( self.width)
+    #    self.bn6 = torch.nn.BatchNorm1d( self.width)
         self.fc1 = nn.Linear(self.width, 128)
         self.fc2 = nn.Linear(128, 1)
 
@@ -189,43 +196,39 @@ class FNO1d_time(nn.Module):
         x1 = self.conv0(x)
         x2 = self.w0(x)
         x = self.bn0(x1 + x2)
-        x = F.gelu(x)
+        #x = x1+x2
+        x = F.relu(x)
 
         x1 = self.conv1(x)
         x2 = self.w1(x)
         x = self.bn1(x1 + x2)
-        x = F.gelu(x)
+        #x = x1+x2
+        x = F.relu(x)
 
         x1 = self.conv2(x)
         x2 = self.w2(x)
         x = self.bn2(x1 + x2)
-        x = F.gelu(x)
+        #x = x1+x2
+        x = F.relu(x)
 
         x1 = self.conv3(x)
         x2 = self.w3(x)
         x = self.bn3(x1 + x2)
-        x = F.gelu(x)
+        #x = x1+x2
+        x = F.relu(x)
 
 
         x1 = self.conv4(x)
         x2 = self.w4(x)
         x = self.bn4(x1 + x2)
-        x = F.gelu(x)
+        #x = x1+x2
+        x = F.relu(x)
 
 
-        x1 = self.conv5(x)
-        x2 = self.w5(x)
-        x = self.bn5(x1 + x2)
-        x = F.gelu(x)
-
-        x1 = self.conv6(x)
-        x2 = self.w6(x)
-        x = self.bn6(x1 + x2)
-        x = F.gelu(x)
         # x = x[..., :-self.padding] # pad the domain if input is non-periodic
         x = x.permute(0, 2, 1) #changing again for linear layer
         x = self.fc1(x)
-        x = F.gelu(x)
+        x = F.relu(x)
         x = self.fc2(x)
         x = x.permute(0, 2, 1)
         return x

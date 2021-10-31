@@ -1,16 +1,17 @@
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
-from models import DataModulePL, ModelEvaluationCallback, BaseModelPL, FNO_1d_time_pl
+from models import DataModulePL, ModelEvaluationCallback, BaseModelPL, FNO_1d_time_pl, BasicNet_pl
 from fire import Fire
 from config import settings as stts
 import os
 import pytorch_lightning as pl
-
+import yaml
+from utils import load_model
 
 config_dict = {
 
     "data": dict(batch_size = 120, skip_steps = 20, store_steps_ahead = 5,
-                 test_ratio = 0.2, max_time_index = 500, drop_last = True),
+                 test_ratio = 0.2, max_time_index = 500, drop_last = True, skip_first_n = 30 ),
 
     "width":40,
     "modes":12,
@@ -19,11 +20,21 @@ config_dict = {
     "name_data": "AC1d",
     "period_evaluation_epochs":30,
     "tol_next_step": 0.001,
-    "weight_decay": 1e-5
+    "weight_decay": 1e-5,
+    "load_pre_trained_model": False,
+    "model":"fno",
+    "norm":True,
 
 }
 
 cfg = config_dict
+
+
+def save_experiment_params(experiment_cfg, save_dir):
+
+    filename = os.path.join(save_dir, "experiment_params.yaml")
+    with open(filename,'w') as f:
+        yaml.dump(experiment_cfg, f)
 
 class Main():
 
@@ -76,8 +87,21 @@ class Main():
         trainer = pl.Trainer(max_epochs = cfg["epochs"], callbacks = [callback1, callback2], flush_logs_every_n_steps = 20, log_every_n_steps= 20,
                             logger = [logger_csv,logger_tensorboard],default_root_dir = models_checkpoints_dir, gpus = 1)
 
+        if cfg["load_pre_trained_model"]:
+            print("\n### LOADING PRETRAINED MODEL {}".format(os.path.join(results_dir, "checkpoints/last.ckpt")))
 
-        model = FNO_1d_time_pl(cfg["modes"], cfg["width"], results_dir = results_dir, tol_next_step = cfg["tol_next_step"], weight_decay = cfg["weight_decay"])
+            if cfg["model"] == "fno":
+                model = load_model(FNO_1d_time_pl,os.path.join(results_dir, "checkpoints/last.ckpt"))
+            elif cfg["model"] == "bnet":
+                model = load_model(BasicNet_pl,os.path.join(results_dir, "checkpoints/last.ckpt"))
+        else:
+            if cfg["model"] == "fno":
+                model = FNO_1d_time_pl(cfg["modes"], cfg["width"],norm = cfg["norm"], results_dir = results_dir, tol_next_step = cfg["tol_next_step"], weight_decay = cfg["weight_decay"])
+            elif cfg["model"] == "bnet":
+                print("Using bnet")
+                model = BasicNet_pl(1,cfg["width"],1,results_dir = results_dir, tol_next_step = cfg["tol_next_step"], weight_decay = cfg["weight_decay"] )
+
+        save_experiment_params(cfg, results_dir)
 
         trainer.fit(model, datamodule = data)
 

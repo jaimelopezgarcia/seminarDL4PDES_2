@@ -29,7 +29,6 @@ def load_model(model_class, checkpoint_pl_filename):
 
     hparams = list(ckpt["hyper_parameters"].values())
     state_dict = ckpt["state_dict"]
-
     model = model_class(*hparams)
 
     model.load_state_dict(state_dict)
@@ -41,6 +40,21 @@ def load_model(model_class, checkpoint_pl_filename):
 
 
 def _make_plots_evaluate(pred, real, preffix_name, save_dir,i):
+
+        fig0 = plt.figure(figsize=(10,10))
+        plt.plot(real[0], color = "black", label = "u0")
+
+        plt.plot(real[1], color = "green", label = "u1")
+        plt.plot(real[2], color = "green", label = "u2")
+        plt.plot(real[3], color = "green", label = "u3")
+
+        plt.plot(pred[1], color = "red", label = "pred1")
+        plt.plot(pred[2], color = "red", label = "pred2")
+        plt.plot(pred[3], color = "red", label = "pred3")
+        plt.legend()
+
+        fig0.savefig(os.path.join(save_dir, preffix_name+"_"+"1D_next_step_comparison_sample_{}.png".format(i)))
+
 
         fig1 = plot_t_x_fun_slices_comparison([real,pred], names = ["real","pred"], nslices = 2, title = "Ground T. vs Pred")
 
@@ -85,6 +99,9 @@ def eval_sim(model, ground_truth_sim):
     """
     evaluates recurrently model using ground_truth_sim as x0, returns np.array
     """
+
+    model.eval()
+    
     if isinstance(ground_truth_sim,np.ndarray):
         ground_truth_sim = torch.Tensor(ground_truth_sim)
     elif isinstance(ground_truth_sim,torch.Tensor):
@@ -119,7 +136,7 @@ def eval_sim(model, ground_truth_sim):
 
 
 
-def prepare_x_y_time_data( simulations , skip_steps = 10, store_steps_ahead = 5, max_time_index = 300):
+def prepare_x_y_time_data( simulations , skip_steps = 10, store_steps_ahead = 5, max_time_index = 300, skip_first_n = 0):
 
     """
     Prepare states and states ahead datasets
@@ -138,7 +155,7 @@ def prepare_x_y_time_data( simulations , skip_steps = 10, store_steps_ahead = 5,
 
     simulations = np.array(simulations)
 
-    simulations = simulations[:,0:max_time_index,:]
+    simulations = simulations[:,skip_first_n:max_time_index,:]
 
     for simulation in tqdm(simulations):
 
