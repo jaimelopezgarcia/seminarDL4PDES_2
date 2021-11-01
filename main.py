@@ -6,7 +6,8 @@ from config import settings as stts
 import os
 import pytorch_lightning as pl
 import yaml
-from utils import load_model
+from utils import load_model,get_data_x0_inverse_problem
+from inverse import FindInitialCondition
 
 config_dict = {
 
@@ -29,6 +30,20 @@ config_dict = {
 
 cfg = config_dict
 
+
+config_dict_inverse = {
+    "simulation_n": 33,
+    "step_x0": 70,
+    "steps_ahead": 80,
+    "skip_steps": 40,
+    "model_name": "AC1d_fno_small",
+    "reg_grad_x": 1e-2,
+    "name_experiment": "default_inverse_experiment_name",
+    "max_iter": 2000,
+    "tol":5e-3,
+}
+
+cfg_inv = config_dict_inverse
 
 def save_experiment_params(experiment_cfg, save_dir):
 
@@ -104,6 +119,34 @@ class Main():
         save_experiment_params(cfg, results_dir)
 
         trainer.fit(model, datamodule = data)
+        
+    def find_initial_condition(self,**kwargs):
+        
+        for key,value in kwargs.items():
+            if key in cfg_inv.keys():
+                cfg_inv[key] = value
+
+            else:
+                raise(ValueError("only admited params are {}".format(cfg_inv)))
+        
+  
+        name_data = "AC1d"
+        simulation = cfg_inv["simulation_n"]
+        step_x0 = cfg_inv["step_x0"]
+        steps_ahead = cfg_inv["steps_ahead"]
+        model_steps_ahead = int(steps_ahead/cfg_inv["skip_steps"])
+        model = load_model(FNO_1d_time_pl,"./results/{}/checkpoints/last.ckpt".format(cfg_inv["model_name"]))
+        reg_grad_x = cfg_inv["reg_grad_x"]
+        name = cfg_inv["name_experiment"]+"_simulation_{}_step_{}_ahead_{}".format(simulation,step_x0, steps_ahead)
+        
+        
+        x0_ground_truth, xnext = get_data_x0_inverse_problem(name_data, simulation, step_x0,steps_ahead)
+
+
+
+        finder = FindInitialCondition(model, name =name)
+
+        out = finder.run(xnext,2,x0_ground_truth=x0_ground_truth, log_every = 20, tol = cfg_inv["tol"], reg_grad_x = reg_grad_x, max_iter = cfg_inv["max_iter"])
 
 
 if __name__ == "__main__":

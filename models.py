@@ -207,6 +207,26 @@ class BaseModelPL(pl.LightningModule):
 
         return x
 
+    def recurrent_evaluation(self,xo,n_steps, grad = True):
+
+        self.eval()
+
+        xouts = []
+        xout = xo
+
+        for step in range(n_steps):
+
+            if grad:
+                xout = self(xout)
+                xouts.append(xout)
+            else:
+                with torch.no_grad():
+                    xout = self(xout)
+                    xouts.append(xout)
+
+        return xouts
+
+
     def training_step(self, batch, batch_idx):
 
 

@@ -21,6 +21,15 @@ class Dummylogging:
 
 logging = Dummylogging()
 
+def get_data_x0_inverse_problem(name_data, simulation, step_x0,steps_ahead):
+
+    arrays = load_arrays(name_data)
+    x0 = arrays[simulation][step_x0][None,None,:]
+    xnext = arrays[simulation][step_x0+steps_ahead][None,None,:]
+
+
+    return x0, xnext
+
 
 def load_model(model_class, checkpoint_pl_filename):
     ###doing this because load_from_checkpoint in pytorch lightining doesnt load model weights ( maybe has to do with inheritance )
@@ -101,7 +110,7 @@ def eval_sim(model, ground_truth_sim):
     """
 
     model.eval()
-    
+
     if isinstance(ground_truth_sim,np.ndarray):
         ground_truth_sim = torch.Tensor(ground_truth_sim)
     elif isinstance(ground_truth_sim,torch.Tensor):
