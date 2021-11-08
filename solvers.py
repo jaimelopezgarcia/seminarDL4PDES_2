@@ -1,1 +1,1 @@
-from utils_jlg.fenics import solve_allen_cahn_1D
+from utils_jlg.fenics import solve_allen_cahn_1D,solve_burgers_1D

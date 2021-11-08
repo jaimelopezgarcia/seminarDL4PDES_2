@@ -271,7 +271,7 @@ def post_process_save_pde_1d(array, name, save_dir):
     #make_gif_1D_arrays(array[::20], duration = 0.1, name = save_name_gif)
 
 
-def load_arrays(name):
+def load_arrays(name, return_names = False):
 
     dir_data = stts["dir_data"]
     dir_name = os.path.join(dir_data,name)
@@ -281,8 +281,10 @@ def load_arrays(name):
     assert name in _dirs, "Only found {} dirs, not {}".format(_dirs, name)
 
     _files = os.listdir(dir_name)
-    _arrays = [_file for _file in _files if ".npy" in _file]
+    names = [_file for _file in _files if ".npy" in _file]
 
-    list_arrays = [np.load( os.path.join(dir_name,array) ) for array in tqdm(_arrays)]
-
-    return list_arrays
+    list_arrays = [np.load( os.path.join(dir_name,array) ) for array in tqdm(names)]
+    if not(return_names):
+        return list_arrays
+    else:
+        return list_arrays, names
